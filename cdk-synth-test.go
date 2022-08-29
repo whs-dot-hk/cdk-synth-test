@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsimagebuilder"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+
+	s3 "github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 )
 
 type CdkSynthTestStackProps struct {
@@ -58,7 +60,7 @@ phases:
 `),
 	})
 
-	awsimagebuilder.NewCfnImageRecipe(stack, jsii.String("ImageRecipe"), &awsimagebuilder.CfnImageRecipeProps{
+	recipe := awsimagebuilder.NewCfnImageRecipe(stack, jsii.String("ImageRecipe"), &awsimagebuilder.CfnImageRecipeProps{
 		Name: jsii.String("cardano-nodes"),
 		ParentImage: jsii.String("arn:aws:imagebuilder:us-east-1:aws:image/amazon-linux-2-x86/x.x.x"),
 		Version: jsii.String("1.0.0"),
@@ -76,6 +78,26 @@ phases:
 				ComponentArn: component.AttrArn(),
 			},
 		},
+	})
+
+	bucket := s3.NewBucket(stack, jsii.String("Bucket"), &s3.BucketProps{
+		BlockPublicAccess: s3.BlockPublicAccess_BLOCK_ALL(),
+	})
+
+	infrastructureConfiguration := awsimagebuilder.NewCfnInfrastructureConfiguration(stack, jsii.String("InfrastructureConfiguration"), &awsimagebuilder.CfnInfrastructureConfigurationProps{
+		InstanceProfileName: jsii.String("EC2InstanceProfileForImageBuilder"),
+		Name: jsii.String("cardano-node"),
+		Logging: &awsimagebuilder.CfnInfrastructureConfiguration_LoggingProperty{
+			S3Logs: &awsimagebuilder.CfnInfrastructureConfiguration_S3LogsProperty{
+				S3BucketName: bucket.BucketName(),
+			},
+		},
+	})
+
+	awsimagebuilder.NewCfnImagePipeline(stack, jsii.String("ImagePipeline"), &awsimagebuilder.CfnImagePipelineProps{
+		Name: jsii.String("cardano-node"),
+		ImageRecipeArn: recipe.AttrArn(),
+		InfrastructureConfigurationArn: infrastructureConfiguration.AttrArn(),
 	})
 
 	return stack
