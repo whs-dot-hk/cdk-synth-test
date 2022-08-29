@@ -4,6 +4,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsimagebuilder"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 
@@ -68,7 +69,7 @@ phases:
 			&awsimagebuilder.CfnImageRecipe_InstanceBlockDeviceMappingProperty{
 				DeviceName: jsii.String("/dev/xvda"),
 				Ebs: &awsimagebuilder.CfnImageRecipe_EbsInstanceBlockDeviceSpecificationProperty{
-					DeleteOnTermination: jsii.Bool(false),
+					DeleteOnTermination: jsii.Bool(true),
 					VolumeSize: jsii.Number(20),
 				},
 			},
@@ -84,8 +85,37 @@ phases:
 		BlockPublicAccess: s3.BlockPublicAccess_BLOCK_ALL(),
 	})
 
+	role := awsiam.NewRole(stack, jsii.String("Role"), &awsiam.RoleProps{
+		AssumedBy: awsiam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), &awsiam.ServicePrincipalOpts{}),
+		ManagedPolicies: &[]awsiam.IManagedPolicy{
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("EC2InstanceProfileForImageBuilder")),
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AmazonSSMManagedInstanceCore")),
+		},
+	})
+
+	pattern := "*"
+
+	role.AttachInlinePolicy(awsiam.NewPolicy(stack, jsii.String("Policy"), &awsiam.PolicyProps{
+		Statements: &[]awsiam.PolicyStatement{
+			awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+				Actions: &[]*string{
+					jsii.String("s3:PutObject"),
+				},
+				Resources: &[]*string{
+					bucket.ArnForObjects(&pattern),
+				},
+			}),
+		},
+	}))
+
+	instanceProfile := awsiam.NewCfnInstanceProfile(stack, jsii.String("InstanceProfile"), &awsiam.CfnInstanceProfileProps{
+		Roles: &[]*string{
+			role.RoleName(),
+		},
+	})
+
 	infrastructureConfiguration := awsimagebuilder.NewCfnInfrastructureConfiguration(stack, jsii.String("InfrastructureConfiguration"), &awsimagebuilder.CfnInfrastructureConfigurationProps{
-		InstanceProfileName: jsii.String("EC2InstanceProfileForImageBuilder"),
+		InstanceProfileName: instanceProfile.Ref(),
 		Name: jsii.String("cardano-node"),
 		Logging: &awsimagebuilder.CfnInfrastructureConfiguration_LoggingProperty{
 			S3Logs: &awsimagebuilder.CfnInfrastructureConfiguration_S3LogsProperty{
