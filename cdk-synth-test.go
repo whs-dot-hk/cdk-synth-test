@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"log"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsimagebuilder"
@@ -28,37 +31,16 @@ func NewCdkSynthTestStack(scope constructs.Construct, id string, props *CdkSynth
 	// queue := awssqs.NewQueue(stack, jsii.String("CdkSynthTestQueue"), &awssqs.QueueProps{
 	// 	VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(300)),
 	// })
+	content, err := os.ReadFile("test.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	component := awsimagebuilder.NewCfnComponent(stack, jsii.String("Component"), &awsimagebuilder.CfnComponentProps{
 		Name: jsii.String("install-cardano-node"),
 		Platform: jsii.String("Linux"),
 		Version: jsii.String("1.0.0"),
-		Data: jsii.String(`schemaVersion: 1.0
-phases:
-  - name: build
-    steps:
-      - name: InstallAnsible
-        action: ExecuteBash
-        inputs:
-          commands:
-          - sudo amazon-linux-extras install -y ansible2
-      - name: InstallGit
-        action: ExecuteBash
-        inputs:
-          commands:
-          - sudo yum install -y git
-      - name: InstallCardanoNode
-        action: ExecuteBash
-        inputs:
-          commands:
-          - |
-            set -x
-            sudo su -l ec2-user -c '(
-            t=$(mktemp -d)
-            git clone --recurse-submodules https://github.com/whslabs/packer-cardano-node.git $t
-            cd $t/ansible/
-            ansible-playbook -idefault, -clocal playbook.yaml
-            )'
-`),
+		Data: jsii.String(string(content)),
 	})
 
 	recipe := awsimagebuilder.NewCfnImageRecipe(stack, jsii.String("ImageRecipe"), &awsimagebuilder.CfnImageRecipeProps{
